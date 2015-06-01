@@ -1,0 +1,6 @@
+[submodule "ext/kosmos"]
+	path = ext/kosmos
+	url = https://raxptor@github.com/raxptor/kosmos
+[submodule "ext/putki"]
+	path = ext/putki
+	url = https://raxptor@github.com/raxptor/putki
