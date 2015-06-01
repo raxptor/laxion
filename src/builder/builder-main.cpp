@@ -2,12 +2,13 @@
 #include <putki/builder/builder.h>
 #include <putki/builder/package.h>
 
+
 // generated.
 namespace inki
 {
 	void bind_kosmos();
-//	void bind_claw();
-	void bind_ccg_ui();
+//	void bind_ccg_ui();
+	void bind_laxion();
 }
 
 //void ccg_ui_register_handlers(putki::builder::data *builder);

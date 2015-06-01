@@ -41,7 +41,6 @@ project "laxion-runtime"
         files { "src/**.h" }
 
         excludes { "src/builder/**.*" }
-        excludes { "src/putki/**.*" }
 
         includedirs { "src" }
 

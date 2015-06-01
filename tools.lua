@@ -36,7 +36,7 @@ solution "Tools"
 
     dofile "ext/putki/libs.lua"
     dofile "ext/kosmos/libs.lua"
-    dofile "ext/ccg-ui/libs.lua"
+    -- dofile "ext/ccg-ui/libs.lua"
 
     project "laxion-putki-lib"
         language "C++"
@@ -45,7 +45,6 @@ solution "Tools"
 
         -- putki last here
         kosmos_use_builder_lib()
-        ccgui_use_builder_lib()
         putki_use_builder_lib()
 
         putki_typedefs_builder("src/types", true)
@@ -56,7 +55,10 @@ solution "Tools"
         language "C++"
         targetname "laxion-databuilder"
 
-        files { "src/builder/**.*" }
+        files { "src/builder/builder-main.cpp" }
+        files { "src/builder/*builder.cpp" }
+        
+        
         links { "laxion-putki-lib" }
         includedirs { "src" }
 
@@ -72,6 +74,8 @@ solution "Tools"
         targetname "laxion-data-dll"
 
         files { "src/builder/dll-main.cpp" }
+        files { "src/builder/*builder.cpp" }
+        
         links { "laxion-putki-lib"}
         includedirs { "src" }
 
