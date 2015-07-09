@@ -14,9 +14,11 @@
 
 #include <cassert>
 #include <stdio.h>
+#include <math.h>
 
 #include <kosmos/glwrap/gl.h>
 
+#include "terrain/terrain.h"
 
 // binding up the blob loads.
 namespace outki
@@ -34,41 +36,43 @@ namespace
 kosmos::shader::program *prog = 0;
 kosmos::render2d::stream *stream = 0;
 
+float camera_pos[3] = {3, 0, 0};
+float gtime = 0;
+
+void camera_matrix(float *out)
+{
+	float persp[16], rot[16], trans[16];
+
+	kosmos::mat4_rot_x(rot, 3.1415f * gtime * 0.01);
+	kosmos::mat4_trans(trans, -camera_pos[0], -camera_pos[1], -camera_pos[2]);
+	kosmos::mat4_persp(persp, 3.0f, 1.5f, 0.1f, 10.0f);
+	kosmos::mul_mat4(out, persp, rot, trans);
+}
+
 void frame(laxion::appwindow::input_batch *input, float deltatime)
 {
 	int x0, y0, x1, y1;
 	laxion::appwindow::get_client_rect(window, &x0, &y0, &x1, &y1);
 	
 	kosmos::render::begin(x1-x0, y1-x0, true, true, 0xff00ff);
-	
-	
-	float persp[16];
-	kosmos::mat4_persp(persp, 0.7f, 0.3f, 1.0f, 100.0f);
-	
-	glMatrixMode(GL_PROJECTION);
-	glLoadMatrixf(persp);
-	
-	glLineWidth(2.5); 
-	glColor3f(1.0, 0.0, 0.0);
 
-	glBegin(GL_LINES);
-	
-	float us = 0.1f;
-	float vs = 0.1f;
-	for (float u=-6.0f;u<6.0f;u+=us)
-	{
-		for (float v=-6.0f;v<6.0f;v+=vs)
-		{
-			float y = -1.0f;
-			glVertex3f(30.0f*u, y, 2.0 + 30.0f * v);
-			glVertex3f(30.0f*(u+us), y, 2.0 + 30.0f * v);
-			glVertex3f(30.0f*u, y, 2.0 + 30.0f * v);
-			glVertex3f(30.0f*u, y, 2.0 + 30.0f * (v + vs));
-		}
-	}
-	
-	glEnd();
-	
+	glMatrixMode(GL_PROJECTION);
+
+	float out[16];
+
+	gtime += 10*deltatime;
+	camera_pos[0] = sinf(0.03f * 0* gtime) * 100;
+	camera_pos[1] = sinf(0.35f * 0*gtime) * 10;
+	camera_pos[2] = cosf(0.05f * 0* gtime) * 100;
+
+	camera_matrix(out);
+	glLoadMatrixf(out);
+
+	terrain::params p;
+	memcpy(p.viewpoint, camera_pos, 3*sizeof(float));
+	p.r = 5.0f;
+	terrain::draw_terrain(-1000, -1000, 1000, 1000, &p);
+
 	kosmos::render::end();
 
 	if (liveupdate)
