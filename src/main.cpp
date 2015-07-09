@@ -43,9 +43,9 @@ void camera_matrix(float *out)
 {
 	float persp[16], rot[16], trans[16];
 
-	kosmos::mat4_rot_x(rot, 3.1415f * gtime * 0.01);
+	kosmos::mat4_rot_x(rot, 0.30f);
 	kosmos::mat4_trans(trans, -camera_pos[0], -camera_pos[1], -camera_pos[2]);
-	kosmos::mat4_persp(persp, 3.0f, 1.5f, 0.1f, 10.0f);
+	kosmos::mat4_persp(persp, 1.20f, 0.90f, 1.0f, 10.0f);
 	kosmos::mul_mat4(out, persp, rot, trans);
 }
 
@@ -61,9 +61,9 @@ void frame(laxion::appwindow::input_batch *input, float deltatime)
 	float out[16];
 
 	gtime += 10*deltatime;
-	camera_pos[0] = sinf(0.03f * 0* gtime) * 100;
-	camera_pos[1] = sinf(0.35f * 0*gtime) * 10;
-	camera_pos[2] = cosf(0.05f * 0* gtime) * 100;
+	camera_pos[0] = sinf(0.03f * gtime) * 100;
+	camera_pos[1] = sinf(0.35f * gtime) * 10;
+	camera_pos[2] = cosf(0.05f * gtime) * 100;
 
 	camera_matrix(out);
 	glLoadMatrixf(out);

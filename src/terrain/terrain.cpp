@@ -9,7 +9,7 @@ namespace terrain
 {
 	float get_height(float x, float z)
 	{
-		return -0.5f * sinf(x*0.3f) + 0.4f * cosf(z*0.4f);
+		return -3.f * sinf(x*0.03f) + 4.0f * cosf(z*0.05f);
 	}
 
 	float edge_scaling(params* p, float x0, float z0, float x1, float z1)
@@ -17,6 +17,10 @@ namespace terrain
 		const float y0 = get_height(x0, z0);
 		const float y1 = get_height(x1, z1);
 
+		const float cx = 0.5f*(x0+x1);
+		const float cy = 0.5f*(y0+y1);
+		const float cz = 0.5f*(z0+z1);
+		
 		float dx0 = x0 - p->viewpoint[0];
 		float dy0 = y0 - p->viewpoint[1];
 		float dz0 = z0 - p->viewpoint[2];
@@ -27,6 +31,7 @@ namespace terrain
 		float d0 = dx0*dx0 + dy0*dy0 + dz0*dz0;
 		float d1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 		float d = d0 < d1 ? d0 : d1;
+		
 
 		return sqrtf((x1-x0)*(x1-x0)+(y1-y0)*(y1-y0)+(z1-z0)*(z1-z0)) / sqrtf(d);
 	}
