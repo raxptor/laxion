@@ -104,9 +104,9 @@ struct update_info
 	
 	// Set the renderer output callback function
 	CVDisplayLinkSetOutputCallback(displayLink, &MyDisplayLinkCallback, self);
-	
+
 	NSOpenGLPixelFormatAttribute attrs[] = {
-		NSOpenGLPFADoubleBuffer,
+		NSOpenGLPFAAllRenderers,
 		NSOpenGLPFADepthSize, 32,
 		0
 	};

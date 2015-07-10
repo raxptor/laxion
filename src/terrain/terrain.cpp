@@ -9,12 +9,12 @@ namespace terrain
 {
 	enum
 	{
-		TILE_SAMPLES    = 512
+		TILE_SAMPLES    = 4096
 	};
 
 	float get_height(float x, float z)
 	{
-		return -3.f * sinf(x*0.02f) + 4.0f * cosf(z*0.03f);// + 5.0f * sinf(-x*0.3f + z*0.5f);
+		return -3.f * sinf(x*0.02f) + 4.0f * cosf(z*0.09f);// + 5.0f * sinf(-x*0.3f + z*0.5f);
 	}
 
 	float edge_scaling(params* p, float x0, float z0, float x1, float z1)
@@ -40,8 +40,13 @@ namespace terrain
 
 	void color(float s)
 	{
-		int levels = 3;
-		int level = (int)(s * (levels-1) + 1.0f/levels);
+		int level = 0;
+
+		if (s < 0.5f)
+			level = 0;
+		else
+			level = 1;
+
 		switch (level)
 		{
 			case 0:
@@ -82,22 +87,23 @@ namespace terrain
 
 		if (!line)
 		{
-		color(s0);
+		//color(s0);
+			glColor3f(0.5*sin(x0*0.2)+0.5f,0.5f+cos(z0*0.1),0.5);
 		vtx(cx, cz);
 		vtx(x0, z0);
 		vtx(x1, z0);
 
-		color(s3);
+		//color(s3);
 		vtx(cx, cz);
 		vtx(x0, z1);
 		vtx(x1, z1);
 
-		color(s2);
+//		color(s2);
 		vtx(cx, cz);
 		vtx(x1, z0);
 		vtx(x1, z1);
 
-		color(s1);
+//		color(s1);
 		vtx(cx, cz);
 		vtx(x0, z0);
 		vtx(x0, z1);
@@ -124,7 +130,7 @@ namespace terrain
 
 		glLineWidth(1.0f);
 		glBegin(GL_TRIANGLES);
-		for (int z=z0;z<z1;z++)
+		for (int z=z1-1;z>=z0;z--)
 		{
 			for (int x=x0;x<x1;x++)
 			{
@@ -140,7 +146,7 @@ namespace terrain
 		{
 			for (int x=x0;x<x1;x++)
 			{
-				do_tile(m, p, tile_size * x, tile_size * z, tile_size * (x + 1),  tile_size * (z + 1), true);
+				//do_tile(m, p, tile_size * x, tile_size * z, tile_size * (x + 1),  tile_size * (z + 1), true);
 			}
 		}
 

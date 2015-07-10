@@ -45,7 +45,7 @@ void camera_matrix(float *out)
 
 	kosmos::mat4_rot_x(rot, 3.1415f * 0.2f);
 	kosmos::mat4_trans(trans, -camera_pos[0], -camera_pos[1], -camera_pos[2]);
-	kosmos::mat4_persp(persp, 1.20f, 0.90f, 1.0f, 10.0f);
+	kosmos::mat4_persp(persp, 1.20f, 0.90f, 1.0f, 1000.0f);
 	kosmos::mul_mat4(out, persp, rot, trans);
 }
 
@@ -56,11 +56,11 @@ void draw_world()
 	m.samples_per_meter = 30.0f;
 
 	int x0, y0, x1, y1;
-	terrain::compute_tiles(&m, camera_pos, 400.0f, &x0, &y0, &x1, &y1);
+	terrain::compute_tiles(&m, camera_pos, 900.0f, &x0, &y0, &x1, &y1);
 
 	terrain::params p;
 	memcpy(p.viewpoint, camera_pos, 3*sizeof(float));
-	p.r = 0.9f;
+	p.r = 2.0f;
 	terrain::draw_terrain_tiles(&m, &p, x0, y0, x1, y1);
 }
 
@@ -72,6 +72,7 @@ void frame(laxion::appwindow::input_batch *input, float deltatime)
 	kosmos::render::begin(x1-x0, y1-x0, true, true, 0xff00ff);
 
 	glMatrixMode(GL_PROJECTION);
+	glEnable(GL_DEPTH_TEST);
 
 	float out[16];
 
@@ -84,7 +85,6 @@ void frame(laxion::appwindow::input_batch *input, float deltatime)
 	glLoadMatrixf(out);
 
 	draw_world();
-
 
 	kosmos::render::end();
 
