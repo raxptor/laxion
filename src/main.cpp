@@ -43,10 +43,25 @@ void camera_matrix(float *out)
 {
 	float persp[16], rot[16], trans[16];
 
-	kosmos::mat4_rot_x(rot, 0.30f);
+	kosmos::mat4_rot_x(rot, 3.1415f * 0.2f);
 	kosmos::mat4_trans(trans, -camera_pos[0], -camera_pos[1], -camera_pos[2]);
 	kosmos::mat4_persp(persp, 1.20f, 0.90f, 1.0f, 10.0f);
 	kosmos::mul_mat4(out, persp, rot, trans);
+}
+
+// from camera viewpoint
+void draw_world()
+{
+	terrain::mapping m;
+	m.samples_per_meter = 30.0f;
+
+	int x0, y0, x1, y1;
+	terrain::compute_tiles(&m, camera_pos, 400.0f, &x0, &y0, &x1, &y1);
+
+	terrain::params p;
+	memcpy(p.viewpoint, camera_pos, 3*sizeof(float));
+	p.r = 0.9f;
+	terrain::draw_terrain_tiles(&m, &p, x0, y0, x1, y1);
 }
 
 void frame(laxion::appwindow::input_batch *input, float deltatime)
@@ -60,18 +75,16 @@ void frame(laxion::appwindow::input_batch *input, float deltatime)
 
 	float out[16];
 
-	gtime += 10*deltatime;
-	camera_pos[0] = sinf(0.03f * gtime) * 100;
-	camera_pos[1] = sinf(0.35f * gtime) * 10;
-	camera_pos[2] = cosf(0.05f * gtime) * 100;
+	gtime += deltatime;
+	camera_pos[0] = sinf(0.3f * gtime) * 100;
+	camera_pos[1] = 5 + sinf(0.35f * gtime) * 1.0f;
+	camera_pos[2] = -20.0f * gtime + cosf(0.05f * gtime) * 100;
 
 	camera_matrix(out);
 	glLoadMatrixf(out);
 
-	terrain::params p;
-	memcpy(p.viewpoint, camera_pos, 3*sizeof(float));
-	p.r = 5.0f;
-	terrain::draw_terrain(-1000, -1000, 1000, 1000, &p);
+	draw_world();
+
 
 	kosmos::render::end();
 

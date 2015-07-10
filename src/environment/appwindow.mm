@@ -13,11 +13,12 @@ struct mouse
 
 struct update_info
 {
+	laxion::appwindow::input_batch input;
 	laxion::appwindow::updatefunc f;
 	laxion::appwindow::data *d;
 };
 
-@interface TestView : NSOpenGLView
+@interface LaxionView : NSOpenGLView
 {
 	CVDisplayLinkRef displayLink; //display link for managing rendering thread
 	@public update_info uinfo;
@@ -30,39 +31,38 @@ struct update_info
 
 @end
 
-@implementation TestView
+@implementation LaxionView
 
-/*
 - (void)mouseMoved:(NSEvent *)theEvent
 {
 	NSPoint mouseLoc = [self convertPoint:[theEvent locationInWindow] fromView:nil];
 	NSRect r = [self bounds];
-	uinfo.mouse.x = mouseLoc.x;
-	uinfo.mouse.y = r.size.height - mouseLoc.y - 1;
+	uinfo.input.mouse_pos[0] = mouseLoc.x;
+	uinfo.input.mouse_pos[1] = r.size.height - mouseLoc.y - 1;
 }
 
 - (void)mouseDragged:(NSEvent *)theEvent
 {
 	NSPoint mouseLoc = [self convertPoint:[theEvent locationInWindow] fromView:nil];
 	NSRect r = [self bounds];
-	uinfo.mouse.x = mouseLoc.x;
-	uinfo.mouse.y = r.size.height - mouseLoc.y - 1;
+	uinfo.input.mouse_pos[0] = mouseLoc.x;
+	uinfo.input.mouse_pos[1] = r.size.height - mouseLoc.y - 1;
 }
 
 - (void)mouseDown:(NSEvent *)theEvent
 {
-	uinfo.mouse.primary.wentDown++;
-	uinfo.mouse.primary.isDown = true;
+	uinfo.input.mouse_wentdown[0]++;
+	uinfo.input.mouse_isdown[0] = 1;
 	printf("Mouse down!\n");
 }
 
 - (void)mouseUp:(NSEvent *)theEvent
 {
-	uinfo.mouse.primary.wentUp++;
-	uinfo.mouse.primary.isDown = false;
+	uinfo.input.mouse_wentup[0]++;
+	uinfo.input.mouse_isdown[0] = 0;
 	printf("Mouse up!\n");
 }
-*/
+
 
 - (id)initWithFrame:(NSRect)frame {
 	self = [super initWithFrame:frame];
@@ -128,9 +128,9 @@ struct update_info
 
 static CVReturn MyDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeStamp* now, const CVTimeStamp* outputTime, CVOptionFlags flagsIn, CVOptionFlags* flagsOut, void* displayLinkContext)
 {
-	TestView *p = (TestView*) displayLinkContext;
-	
-	NSSize    viewBounds = [p bounds].size;
+	LaxionView *p = (LaxionView*) displayLinkContext;
+
+	NSSize viewBounds = [p bounds].size;
 	p->viewWidth = viewBounds.width;
 	p->viewHeight = viewBounds.height;
 	
@@ -140,7 +140,7 @@ static CVReturn MyDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTime
 	// must lock GL context because display link is threaded
 	CGLLockContext((CGLContextObj)[currentContext CGLContextObj]);
 	
-	CVReturn result = [(TestView*)displayLinkContext getFrameForTime:outputTime];
+	CVReturn result = [(LaxionView*)displayLinkContext getFrameForTime:outputTime];
 	
 	// draw here
 	[currentContext flushBuffer];
@@ -151,16 +151,14 @@ static CVReturn MyDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTime
 
 - (CVReturn)getFrameForTime:(const CVTimeStamp*)outputTime
 {
-	// Add your drawing codes here
 	if (uinfo.f)
 	{
-		/*
-		laxion::appwindow::input_batch ib;
-		ib.mouse = uinfo.mouse;
-		uinfo.mouse.primary.wentUp = 0;
-		uinfo.mouse.primary.wentDown = 0;
-		*/
-		uinfo.f(0, 0.005f);
+		uinfo.f(&uinfo.input, 0.005f);
+		for (int i=0;i<laxion::appwindow::input_batch::BUTTONS;i++)
+		{
+			uinfo.input.mouse_wentdown[i] = 0;
+			uinfo.input.mouse_wentup[i] = 0;
+		}
 	}
 	return kCVReturnSuccess;
 }
@@ -231,7 +229,7 @@ namespace laxion
 			NSAutoreleasePool *pool;
 			NSApplication *app;
 			NSWindow *window;
-			TestView *view;
+			LaxionView *view;
 			AppDelegate *appdelegate;
 		};
 		
@@ -251,18 +249,11 @@ namespace laxion
 					 styleMask:NSTitledWindowMask | NSClosableWindowMask | NSMiniaturizableWindowMask | NSResizableWindowMask
 					 backing:NSBackingStoreBuffered
 					 defer:false];
-			
-			d->view = [[[TestView alloc] initWithFrame:frame] autorelease];
 
-/*
-			d->view->uinfo.d = d;
-			d->view->uinfo.mouse.x = 0;
-			d->view->uinfo.mouse.y = 0;
-			d->view->uinfo.mouse.primary.wentDown = 0;
-			d->view->uinfo.mouse.primary.wentUp = 0;
-			d->view->uinfo.mouse.primary.isDown = false;
-*/
-			
+			d->view = [[[LaxionView alloc] initWithFrame:frame] autorelease];
+
+			memset(&d->view->uinfo.input, 0x00, sizeof(input_batch));
+
 			[d->window setContentView:d->view];
 			[d->window makeKeyAndOrderFront:nil];
 			

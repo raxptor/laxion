@@ -8,7 +8,14 @@ namespace laxion
 
 		struct input_batch
 		{
-			// ccgui::mouse_input mouse;
+			enum
+			{
+				BUTTONS = 2
+			};
+			float mouse_pos[2];
+			int mouse_wentdown[BUTTONS];
+			int mouse_wentup[BUTTONS];
+			int mouse_isdown[BUTTONS];
 		};
 
 		typedef void (*updatefunc)(input_batch *input, float deltatime);

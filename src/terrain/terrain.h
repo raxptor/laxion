@@ -8,5 +8,11 @@ namespace terrain
 		float r;
 	};
 
-	void draw_terrain(float x0, float z0, float x1, float z1, params* p);
+	struct mapping
+	{
+		float samples_per_meter;
+	};
+
+	void compute_tiles(mapping *m, float *camera_pos, float range, int* x0, int* z0, int *x1, int* z1);
+	void draw_terrain_tiles(mapping *m, params* p, int x0, int z0, int x1, int z1);
 }
