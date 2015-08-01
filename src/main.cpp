@@ -43,7 +43,7 @@ void camera_matrix(float *out)
 {
 	float persp[16], rot[16], trans[16];
 
-	kosmos::mat4_rot_x(rot, 3.1415f * 0.2f);
+	kosmos::mat4_rot_x(rot, 3.1415f * 0.04f);
 	kosmos::mat4_trans(trans, -camera_pos[0], -camera_pos[1], -camera_pos[2]);
 	kosmos::mat4_persp(persp, 1.20f, 0.90f, 1.0f, 1000.0f);
 	kosmos::mul_mat4(out, persp, rot, trans);
@@ -53,7 +53,7 @@ void camera_matrix(float *out)
 void draw_world()
 {
 	terrain::mapping m;
-	m.samples_per_meter = 30.0f;
+	m.samples_per_meter = 15.0f;
 
 	int x0, y0, x1, y1;
 	terrain::compute_tiles(&m, camera_pos, 900.0f, &x0, &y0, &x1, &y1);
@@ -76,9 +76,9 @@ void frame(laxion::appwindow::input_batch *input, float deltatime)
 
 	float out[16];
 
-	gtime += deltatime;
+	gtime += 3.3f * deltatime;
 	camera_pos[0] = sinf(0.3f * gtime) * 100;
-	camera_pos[1] = 5 + sinf(0.35f * gtime) * 1.0f;
+	camera_pos[1] = 5.0f + sinf(0.35f * gtime) * 4.0f;
 	camera_pos[2] = -20.0f * gtime + cosf(0.05f * gtime) * 100;
 
 	camera_matrix(out);

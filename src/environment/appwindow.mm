@@ -251,6 +251,15 @@ namespace laxion
 					 defer:false];
 
 			d->view = [[[LaxionView alloc] initWithFrame:frame] autorelease];
+			
+			NSOpenGLPixelFormatAttribute attrs[] = {
+				NSOpenGLPFAAllRenderers,
+				NSOpenGLPFADepthSize, 32,
+				0
+			};
+
+			NSOpenGLPixelFormat *fmt = [[NSOpenGLPixelFormat alloc] initWithAttributes:attrs];
+			[d->view setPixelFormat: fmt];
 
 			memset(&d->view->uinfo.input, 0x00, sizeof(input_batch));
 

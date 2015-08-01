@@ -1,6 +1,7 @@
 #include "terrain.h"
 
 #include <kosmos/glwrap/gl.h>
+#include <kosmos/core/mat4.h>
 
 #include <math.h>
 #include <stdio.h>
@@ -11,11 +12,113 @@ namespace terrain
 	{
 		TILE_SAMPLES    = 4096
 	};
+	
+	struct terrain_vtx_t
+	{
+		float x, y;
+		float u, v;
+	};
+	
+	int in_layer(int layer)
+	{
+		return 1 + 1 * layer;
+	}
+	
+	void make_patch_vertices(terrain_vtx_t *out, int size)
+	{
+		//    0
+		//   1 2
+		//  3 4 5
+		// 6 7 8 9
+		float height = 1.0f / float(size-1);
+		for (int i=0;i!=size;i++)
+		{
+			const float y = height * float(i);
+			const float x0 = - height * float(i);
+			int num = 1 + i;
+			for (int j=0;j<num;j++)
+			{
+				out->x = x0 + float(2.0f * j)*height;
+				out->y = y;
+				out->u = 0;
+				out->v = 0;
+				out++;
+			}
+		}
+	}
+	
+	// returns count of indices
+	int make_indices(unsigned short *out, int size)
+	{
+		// 0
+		// 1 2
+		// 3 4 5
+		// 6 7 8 9
+	
+		// k . . .
+		// l . . . .
+		// m . . . . .
+		int k = 0;
+		int l = 1;
+		int m = 3;
+		
+		unsigned short *start = out;
+		for (int i=0;i<(size-1);i++)
+		{
+			int K = k;
+			int L = l;
+			while (true)
+			{
+				if ((L + 1) < m)
+				{
+					/*
+					*out++ = L;
+					*out++ = K;
+					*out++ = L+1;
+					*/
+					L++;
+				}
+				if ((K + 1) < l)
+				{
+					*out++ = L;
+					*out++ = K;
+					*out++ = K + 1;
+					K++;
+				}
+				if (K == (l-1) && L == (m-1))
+					break;
+			}
+			k = l;
+			l = m;
+			m = m + (i + 3);
+		}
+		return out - start;
+	}
+	
 
 	float get_height(float x, float z)
 	{
-		return -3.f * sinf(x*0.02f) + 4.0f * cosf(z*0.09f);// + 5.0f * sinf(-x*0.3f + z*0.5f);
+		return sinf(x*0.03f + z*0.03f) * 10.0;
+//		return -3.f * sinf(x*0.05f) + 4.0f * cosf(z*0.09f);// + 5.0f * sinf(-x*0.3f + z*0.5f);
 	}
+	
+	void draw_patch(int size, float* mtx)
+	{
+		terrain_vtx_t vtx[1024];
+		unsigned short idx[4096];
+		make_patch_vertices(vtx, size);
+		int count = make_indices(idx, size);
+		for (int i=0;i<count;i++)
+		{
+			int v = idx[i];
+			float pos[4] = {vtx[v].x, 0, vtx[v].y, 1};
+			float out[4];
+			kosmos::mul_mat4_vec4(out, mtx, pos);
+			out[1] = get_height(out[0], out[2]);
+			glVertex3f(out[0], out[1], out[2]);
+		}
+	}
+
 
 	float edge_scaling(params* p, float x0, float z0, float x1, float z1)
 	{
@@ -63,6 +166,14 @@ namespace terrain
 				break;
 		}
 	}
+	
+	int level(float s)
+	{
+		if (s < 0.5f)
+			return 5;
+		else
+			return 9;
+	}
 
 	void do_tile(mapping *m, params *p, float x0, float z0, float x1, float z1, bool line)
 	{
@@ -87,48 +198,57 @@ namespace terrain
 
 		if (!line)
 		{
-		//color(s0);
 			glColor3f(0.5*sin(x0*0.2)+0.5f,0.5f+cos(z0*0.1),0.5);
-		vtx(cx, cz);
-		vtx(x0, z0);
-		vtx(x1, z0);
-
-		//color(s3);
-		vtx(cx, cz);
-		vtx(x0, z1);
-		vtx(x1, z1);
-
-//		color(s2);
-		vtx(cx, cz);
-		vtx(x1, z0);
-		vtx(x1, z1);
-
-//		color(s1);
-		vtx(cx, cz);
-		vtx(x0, z0);
-		vtx(x0, z1);
+			
+			const float sx = 0.5f * (x1 - x0);
+			const float sz = 0.5f * (z1 - z0);
+			float mtx[16];
+			kosmos::mat4_zero(mtx);
+			// down
+			mtx[0] = sx;
+			mtx[5] = 1.0f;
+			mtx[10] = sz;
+			mtx[12] = cx;
+			mtx[14] = cz;
+			draw_patch(level(s3), mtx);
+			// up
+			mtx[0] = -sx;
+			mtx[10] = -sz;
+			mtx[12] = cx;
+			mtx[14] = cz;
+			draw_patch(level(s0), mtx);
+			// left
+			mtx[0] = 0;
+			mtx[10] = 0;
+			mtx[2] = -sx;
+			mtx[8] = -sz;
+			draw_patch(level(s1), mtx);
+			// right
+			mtx[0] = 0;
+			mtx[10] = 0;
+			mtx[2] = sx;
+			mtx[8] = sz;
+			draw_patch(level(s2), mtx);
 		}
 		else
 		{
-		glColor3f(1, 1, 1);
-		glVertex3f(x0, get_height(x0, z0), z0);
-		glVertex3f(x1, get_height(x1, z0), z0);
-		glVertex3f(x0, get_height(x0, z0), z0);
-		glVertex3f(x0, get_height(x0, z1), z1);
+			glColor3f(1, 1, 1);
+			glVertex3f(x0, get_height(x0, z0), z0);
+			glVertex3f(x1, get_height(x1, z0), z0);
+			glVertex3f(x0, get_height(x0, z0), z0);
+			glVertex3f(x0, get_height(x0, z1), z1);
 
-		glVertex3f(x1, get_height(x1, z0), z0);
-		glVertex3f(x1, get_height(x1, z1), z1);
-		glVertex3f(x0, get_height(x0, z1), z1);
-		glVertex3f(x1, get_height(x1, z1), z1);
+			glVertex3f(x1, get_height(x1, z0), z0);
+			glVertex3f(x1, get_height(x1, z1), z1);
+			glVertex3f(x0, get_height(x0, z1), z1);
+			glVertex3f(x1, get_height(x1, z1), z1);
 		}
 	}
 
 	void draw_terrain_tiles(mapping *m, params* p, int x0, int z0, int x1, int z1)
 	{
-
 		const float tile_size = (float)TILE_SAMPLES / m->samples_per_meter;
 
-		glLineWidth(1.0f);
 		glBegin(GL_TRIANGLES);
 		for (int z=z1-1;z>=z0;z--)
 		{
@@ -139,18 +259,19 @@ namespace terrain
 		}
 
 		glEnd();
-
+		
+		/*
 		glLineWidth(1.0f);
 		glBegin(GL_LINES);
 		for (int z=z0;z<z1;z++)
 		{
 			for (int x=x0;x<x1;x++)
 			{
-				//do_tile(m, p, tile_size * x, tile_size * z, tile_size * (x + 1),  tile_size * (z + 1), true);
+				do_tile(m, p, tile_size * x, tile_size * z, tile_size * (x + 1),  tile_size * (z + 1), true);
 			}
 		}
-
 		glEnd();
+		*/
 	}
 
 	void compute_tiles(mapping *m, float *camera_pos, float range, int* x0, int* z0, int *x1, int* z1)
