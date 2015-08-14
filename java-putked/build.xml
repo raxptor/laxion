@@ -1,0 +1,49 @@
+<project name="com.raxptor.laxion.putked" default="dist" basedir=".">
+  <description>
+  	Claw
+  </description>
+    
+  <property name="build" location="build"/>
+  <property name="dist" location="dist"/>
+  <property name="putki-putked" location="../ext/putki/putked" />
+  <property name="kosmos-plugin" location="../ext/kosmos/putked-plugin" />
+
+  <target name="build-deps">
+	<ant antfile="${putki-putked}/putked-lib/build.xml" dir="${putki-putked}/putked-lib" target="compile"/>
+	<ant antfile="${putki-putked}/editor/build.xml" dir="${putki-putked}/editor" target="compile"/>
+	<ant antfile="${kosmos-plugin}/build.xml" dir="${kosmos-plugin}" target="compile"/>
+  </target>
+                        
+  <target name="init">
+    <tstamp/>
+    <mkdir dir="${build}"/>
+  </target>
+
+  <target name="compile" depends="init,build-deps">
+    <javac destdir="${build}" includeantruntime="false">
+    <classpath>
+      <pathelement path="${classpath}" />
+    </classpath>
+    <src path="src" />
+    </javac>
+    <copy file="../build/liblaxion-data-dll.dylib" tofile="${build}/native/liblaxion-data-dll.dylib" failonerror="false" />
+    <copy file="../build/laxion-databuilder" tofile="${build}/native/laxion-databuilder" failonerror="false" />
+    <copy file="../build/laxion-data-dll.dll" tofile="${build}/native/laxion-data-dll.dll" failonerror="false" />
+    <copy file="../build/laxion-databuilder.exe" tofile="${build}/native/laxion-databuilder.exe" failonerror="false" />
+   </target>
+
+  <target name="dist" depends="compile">
+    <mkdir dir="${dist}" />
+    <jar jarfile="${dist}/editor.jar" basedir="${build}">
+      <manifest>
+        <attribute name="Main-Class" value="com.raxptor.laxion.Main"/>
+        <attribute name="Class-Path" value="jna.jar" />
+      </manifest>    
+    </jar>
+  </target>
+
+  <target name="clean">
+    <delete dir="${build}"/>
+    <delete dir="${dist}"/>
+  </target>
+</project>

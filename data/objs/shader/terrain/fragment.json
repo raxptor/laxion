@@ -1,0 +1,11 @@
+{
+	type: "FragmentShader",
+	data: {
+		"parent": {
+			"SourceFile": "fp.shader",
+			"Data": ""
+		}
+	},
+	aux: [
+	]
+}

@@ -1,0 +1,15 @@
+{
+	type: "ShaderProgram",
+	data: {
+		"VertexShader": "shader/terrain/vertex",
+		"FragmentShader": "shader/terrain/fragment",
+		"VertexText": {
+			"data": ""
+		},
+		"FragmentText": {
+			"data": ""
+		}
+	},
+	aux: [
+	]
+}

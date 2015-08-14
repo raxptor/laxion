@@ -1,0 +1,8 @@
+%include types/kosmos/Shader.typedef
+
+TerrainConfig
+{
+	ptr ShaderProgram Shader
+	float Detail
+}
+
