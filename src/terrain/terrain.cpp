@@ -2,15 +2,19 @@
 
 #include <kosmos/glwrap/gl.h>
 #include <kosmos/core/mat4.h>
+#include <kosmos/render/shader.h>
+#include <kosmos/log/log.h>
 
 #include <math.h>
 #include <stdio.h>
 
 namespace terrain
 {
+	// Tiles are just convenient places to start subdividing.
+	//
 	enum
 	{
-		TILE_SAMPLES    = 4096
+		TILE_SAMPLES    = 1024,
 	};
 	
 	struct terrain_vtx_t
@@ -94,31 +98,48 @@ namespace terrain
 		}
 		return out - start;
 	}
-	
 
 	float get_height(float x, float z)
 	{
 		return sinf(x*0.03f + z*0.03f) * 10.0;
-//		return -3.f * sinf(x*0.05f) + 4.0f * cosf(z*0.09f);// + 5.0f * sinf(-x*0.3f + z*0.5f);
 	}
 	
-	void draw_patch(int size, float* mtx)
+	terrain_vtx_t* make_patch(int size, terrain_vtx_t *out_array)
 	{
-		terrain_vtx_t vtx[1024];
-		unsigned short idx[4096];
+		static terrain_vtx_t vtx[1024*1024];
+		unsigned short idx[1024*1024];
 		make_patch_vertices(vtx, size);
 		int count = make_indices(idx, size);
 		for (int i=0;i<count;i++)
 		{
 			int v = idx[i];
-			float pos[4] = {vtx[v].x, 0, vtx[v].y, 1};
-			float out[4];
-			kosmos::mul_mat4_vec4(out, mtx, pos);
-			out[1] = get_height(out[0], out[2]);
-			glVertex3f(out[0], out[1], out[2]);
+			out_array->x = vtx[v].x;
+			out_array->y = vtx[v].y;
+			out_array->u = vtx[v].x;
+			out_array->v = vtx[v].y;
+			out_array++;
 		}
+		return out_array;
 	}
 
+	enum {
+		MAX_INSTANCES = 128
+	};
+
+	struct data
+	{
+		outki::TerrainConfig *config;
+		kosmos::shader::program *sprog;
+		GLuint vbo;
+		int level0_begin, level0_end;
+		int level1_begin, level1_end;
+
+		float lvl0_mtx[MAX_INSTANCES*16];
+		float lvl1_mtx[MAX_INSTANCES*16];
+		int lvl0_count, lvl1_count;
+	};
+
+	static long long s_polys = 0, s_drawcalls = 0;
 
 	float edge_scaling(params* p, float x0, float z0, float x1, float z1)
 	{
@@ -170,12 +191,50 @@ namespace terrain
 	int level(float s)
 	{
 		if (s < 0.5f)
-			return 5;
+			return 0;
 		else
-			return 9;
+			return 1;
 	}
 
-	void do_tile(mapping *m, params *p, float x0, float z0, float x1, float z1, bool line)
+	void flush(data* d, bool force)
+	{
+		int lim = force ? 0 : (MAX_INSTANCES - 1);
+		if (d->lvl0_count > lim)
+		{
+			glUniformMatrix4fv(kosmos::shader::find_uniform(d->sprog, "tileworld"), d->lvl0_count, GL_FALSE, d->lvl0_mtx);
+			//glDrawArraysInstanced(GL_TRIANGLES, d->level0_begin, d->level0_end - d->level0_begin, d->lvl0_count);
+			d->lvl0_count = 0;
+
+			s_polys += (d->level0_end-d->level0_begin) / 3;
+			s_drawcalls++;
+		}
+		if (d->lvl1_count > lim)
+		{
+			glUniformMatrix4fv(kosmos::shader::find_uniform(d->sprog, "tileworld"), d->lvl0_count, GL_FALSE, d->lvl1_mtx);
+			//glDrawArraysInstanced(GL_TRIANGLES, d->level0_begin, d->level1_end - d->level1_begin, d->lvl1_count);
+			d->lvl1_count = 0;
+			s_polys += (d->level1_end-d->level1_begin) / 3;
+			s_drawcalls++;
+		}
+	}
+
+	void draw_patch(data *d, int index, float *mtx)
+	{
+		flush(d, false);
+
+		if (index == 0)
+		{
+			memcpy(&d->lvl0_mtx[d->lvl0_count * 16], mtx, 16*sizeof(float));
+			d->lvl0_count++;
+		}
+		else
+		{
+			memcpy(&d->lvl1_mtx[d->lvl1_count * 16], mtx, 16*sizeof(float));
+			d->lvl1_count++;
+		}
+	}
+
+	void do_tile(data *d, mapping *m, params *p, float x0, float z0, float x1, float z1)
 	{
 		const float s0 = p->r * edge_scaling(p, x0, z0, x1, z0);
 		const float s1 = p->r * edge_scaling(p, x0, z0, x0, z1);
@@ -186,92 +245,116 @@ namespace terrain
 		{
 			float cx = .5f * (x0 + x1);
 			float cz = .5f * (z0 + z1);
-			do_tile(m, p, x0, z0, cx, cz, line);
-			do_tile(m, p, cx, z0, x1, cz, line);
-			do_tile(m, p, x0, cz, cx, z1, line);
-			do_tile(m, p, cx, cz, x1, z1, line);
+			do_tile(d, m, p, x0, z0, cx, cz);
+			do_tile(d, m, p, cx, z0, x1, cz);
+			do_tile(d, m, p, x0, cz, cx, z1);
+			do_tile(d, m, p, cx, cz, x1, z1);
 			return;
 		}
 
 		const float cx = (x0+x1) / 2.0f;
 		const float cz = (z0+z1) / 2.0f;
 
-		if (!line)
-		{
-			glColor3f(0.5*sin(x0*0.2)+0.5f,0.5f+cos(z0*0.1),0.5);
-			
-			const float sx = 0.5f * (x1 - x0);
-			const float sz = 0.5f * (z1 - z0);
-			float mtx[16];
-			kosmos::mat4_zero(mtx);
-			// down
-			mtx[0] = sx;
-			mtx[5] = 1.0f;
-			mtx[10] = sz;
-			mtx[12] = cx;
-			mtx[14] = cz;
-			draw_patch(level(s3), mtx);
-			// up
-			mtx[0] = -sx;
-			mtx[10] = -sz;
-			mtx[12] = cx;
-			mtx[14] = cz;
-			draw_patch(level(s0), mtx);
-			// left
-			mtx[0] = 0;
-			mtx[10] = 0;
-			mtx[2] = -sx;
-			mtx[8] = -sz;
-			draw_patch(level(s1), mtx);
-			// right
-			mtx[0] = 0;
-			mtx[10] = 0;
-			mtx[2] = sx;
-			mtx[8] = sz;
-			draw_patch(level(s2), mtx);
-		}
-		else
-		{
-			glColor3f(1, 1, 1);
-			glVertex3f(x0, get_height(x0, z0), z0);
-			glVertex3f(x1, get_height(x1, z0), z0);
-			glVertex3f(x0, get_height(x0, z0), z0);
-			glVertex3f(x0, get_height(x0, z1), z1);
-
-			glVertex3f(x1, get_height(x1, z0), z0);
-			glVertex3f(x1, get_height(x1, z1), z1);
-			glVertex3f(x0, get_height(x0, z1), z1);
-			glVertex3f(x1, get_height(x1, z1), z1);
-		}
+		const float sx = 0.5f * (x1 - x0);
+		const float sz = 0.5f * (z1 - z0);
+		float mtx[16];
+		kosmos::mat4_zero(mtx);
+		// down
+		mtx[0] = sx;
+		mtx[5] = 1.0f;
+		mtx[10] = sz;
+		mtx[12] = cx;
+		mtx[14] = cz;
+		mtx[15] = 1;
+		draw_patch(d, level(s3), mtx);
+		// up
+		mtx[0] = -sx;
+		mtx[10] = -sz;
+		mtx[12] = cx;
+		mtx[14] = cz;
+		draw_patch(d, level(s0), mtx);
+		// left
+		mtx[0] = 0;
+		mtx[10] = 0;
+		mtx[2] = -sx;
+		mtx[8] = -sz;
+		draw_patch(d, level(s1), mtx);
+		// right
+		mtx[0] = 0;
+		mtx[10] = 0;
+		mtx[2] = sx;
+		mtx[8] = sz;
+		draw_patch(d, level(s2), mtx);
 	}
 
-	void draw_terrain_tiles(mapping *m, params* p, int x0, int z0, int x1, int z1)
+	data* create(outki::TerrainConfig *config)
+	{
+		data *d = new data();
+		glGenBuffers(1, &d->vbo);
+
+		d->sprog = kosmos::shader::program_get(config->Shader);
+		if (!d->sprog)
+		{
+			KOSMOS_ERROR("No terrain program")
+			return 0;
+		}
+
+		static terrain_vtx_t buf[1024*1024];
+		terrain_vtx_t *end0 = make_patch(33, &buf[0]);
+		terrain_vtx_t *end1 = make_patch(65, end0);
+
+		d->level0_begin = 0;
+		d->level0_end = end0 - buf;
+		d->level1_begin = d->level0_end;
+		d->level1_end = end1 - buf;
+
+		glBindBuffer(GL_ARRAY_BUFFER, d->vbo);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(terrain_vtx_t) * (end1 - buf), buf, GL_STATIC_DRAW);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		return d;
+	}
+
+	void free(data *d)
+	{
+		kosmos::shader::program_free(d->sprog);
+		glDeleteBuffers(1, &d->vbo);
+		delete d;
+	}
+
+
+	void draw_terrain_tiles(data *d, mapping *m, params* p, int x0, int z0, int x1, int z1)
 	{
 		const float tile_size = (float)TILE_SAMPLES / m->samples_per_meter;
 
-		glBegin(GL_TRIANGLES);
+		kosmos::shader::program_use(d->sprog);
+
+		// binds to active buffer
+		glBindBuffer(GL_ARRAY_BUFFER, d->vbo);
+		glVertexAttribPointer(kosmos::shader::find_attribute(d->sprog, "vpos"), 2, GL_FLOAT, GL_FALSE, sizeof(terrain_vtx_t), 0);
+		glVertexAttribPointer(kosmos::shader::find_attribute(d->sprog, "tpos"), 2, GL_FLOAT, GL_FALSE, sizeof(terrain_vtx_t), (void*)8);
+		glEnableVertexAttribArray(kosmos::shader::find_attribute(d->sprog, "vpos"));
+		glEnableVertexAttribArray(kosmos::shader::find_attribute(d->sprog, "tpos"));
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+		glUniformMatrix4fv(kosmos::shader::find_uniform(d->sprog, "viewproj"), 1, GL_FALSE, p->view_mtx);
+
+		s_polys = 0;
+		s_drawcalls = 0;
+
+		d->lvl0_count = 0;
+		d->lvl1_count = 0;
+
 		for (int z=z1-1;z>=z0;z--)
 		{
 			for (int x=x0;x<x1;x++)
 			{
-				do_tile(m, p, tile_size * x, tile_size * z, tile_size * (x + 1),  tile_size * (z + 1), false);
+				do_tile(d, m, p, tile_size * x, tile_size * z, tile_size * (x + 1),  tile_size * (z + 1));
 			}
 		}
 
-		glEnd();
-		
-		/*
-		glLineWidth(1.0f);
-		glBegin(GL_LINES);
-		for (int z=z0;z<z1;z++)
-		{
-			for (int x=x0;x<x1;x++)
-			{
-				do_tile(m, p, tile_size * x, tile_size * z, tile_size * (x + 1),  tile_size * (z + 1), true);
-			}
-		}
-		glEnd();
-		*/
+		flush(d, true);
+
+		glUseProgram(0);
 	}
 
 	void compute_tiles(mapping *m, float *camera_pos, float range, int* x0, int* z0, int *x1, int* z1)
@@ -288,5 +371,7 @@ namespace terrain
 		*z0 = tz - range_tiles;
 		*x1 = tx + range_tiles;
 		*z1 = tz + range_tiles;
+
+		printf("%d %d %d %d\n", *x0, *z0, *x1, *z1);
 	}
 }

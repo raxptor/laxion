@@ -2,7 +2,7 @@
 	type: "VertexShader",
 	data: {
 		"parent": {
-			"SourceFile": "fp.shader",
+			"SourceFile": "vp.shader",
 			"Data": ""
 		}
 	},

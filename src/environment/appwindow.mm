@@ -5,6 +5,7 @@
 #import <QuartzCore/CVDisplayLink.h>
 
 #include <vector>
+#include <kosmos/glwrap/gl.h>
 
 struct mouse
 {
@@ -108,11 +109,12 @@ struct update_info
 	NSOpenGLPixelFormatAttribute attrs[] = {
 		NSOpenGLPFAAllRenderers,
 		NSOpenGLPFADepthSize, 32,
+		NSOpenGLPFAOpenGLProfile,
+		NSOpenGLProfileVersion3_2Core,	
 		0
 	};
-	
+
 	CGLPixelFormatObj cglPixelFormat  = (CGLPixelFormatObj) [[NSOpenGLPixelFormat alloc] initWithAttributes:attrs];
-	
 	
 	CVDisplayLinkCreateWithActiveCGDisplays(&displayLink);
 	CVDisplayLinkSetOutputCallback(displayLink, MyDisplayLinkCallback, self);
@@ -121,9 +123,11 @@ struct update_info
 	
 	// Activate the display link
 	CVDisplayLinkStart(displayLink);
-	
+
 	viewWidth = 100;
 	viewHeight = 100;
+
+	printf("Starting with [%s]\n", glGetString(GL_VERSION));
 }
 
 static CVReturn MyDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeStamp* now, const CVTimeStamp* outputTime, CVOptionFlags flagsIn, CVOptionFlags* flagsOut, void* displayLinkContext)
