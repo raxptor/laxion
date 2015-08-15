@@ -20,6 +20,7 @@ solution "Laxion"
 		flags {"Optimize"}
 	
 	configuration {}
+		defines("KOSMOS_GL3")
 	
 	flags { "Symbols" }
 	libdirs {"/usr/lib"}

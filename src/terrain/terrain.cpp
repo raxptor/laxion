@@ -14,7 +14,7 @@ namespace terrain
 	//
 	enum
 	{
-		TILE_SAMPLES    = 1024,
+		TILE_SAMPLES    = 4096,
 	};
 	
 	struct terrain_vtx_t
@@ -107,7 +107,7 @@ namespace terrain
 	terrain_vtx_t* make_patch(int size, terrain_vtx_t *out_array)
 	{
 		static terrain_vtx_t vtx[1024*1024];
-		unsigned short idx[1024*1024];
+		static unsigned short idx[1024*1024];
 		make_patch_vertices(vtx, size);
 		int count = make_indices(idx, size);
 		for (int i=0;i<count;i++)
@@ -130,7 +130,7 @@ namespace terrain
 	{
 		outki::TerrainConfig *config;
 		kosmos::shader::program *sprog;
-		GLuint vbo;
+		GLuint vbo, vao;
 		int level0_begin, level0_end;
 		int level1_begin, level1_end;
 
@@ -157,37 +157,6 @@ namespace terrain
 		return sqrtf((x1-x0)*(x1-x0)+(y1-y0)*(y1-y0)+(z1-z0)*(z1-z0)) / sqrtf(d);
 	}
 
-	inline void vtx(float x, float z)
-	{
-		glVertex3f(x, get_height(x, z), z);
-	}
-
-	void color(float s)
-	{
-		int level = 0;
-
-		if (s < 0.5f)
-			level = 0;
-		else
-			level = 1;
-
-		switch (level)
-		{
-			case 0:
-				glColor3f(0.50f, 0.00f, 0.00f);
-				break;
-			case 1:
-				glColor3f(0.00f, 0.60f, 0.00f);
-				break;
-			case 2:
-				glColor3f(0.00f, 0.00f, 0.60f);
-				break;
-			default:
-				glColor3f(0.60f, 0.60f, 0.60f);
-				break;
-		}
-	}
-	
 	int level(float s)
 	{
 		if (s < 0.5f)
@@ -202,19 +171,22 @@ namespace terrain
 		if (d->lvl0_count > lim)
 		{
 			glUniformMatrix4fv(kosmos::shader::find_uniform(d->sprog, "tileworld"), d->lvl0_count, GL_FALSE, d->lvl0_mtx);
-			//glDrawArraysInstanced(GL_TRIANGLES, d->level0_begin, d->level0_end - d->level0_begin, d->lvl0_count);
-			d->lvl0_count = 0;
+			glDrawArraysInstanced(GL_TRIANGLES, d->level0_begin, d->level0_end - d->level0_begin, d->lvl0_count);
 
-			s_polys += (d->level0_end-d->level0_begin) / 3;
+			s_polys += d->lvl0_count * (d->level0_end-d->level0_begin) / 3;
 			s_drawcalls++;
+            
+            d->lvl0_count = 0;
 		}
 		if (d->lvl1_count > lim)
 		{
-			glUniformMatrix4fv(kosmos::shader::find_uniform(d->sprog, "tileworld"), d->lvl0_count, GL_FALSE, d->lvl1_mtx);
-			//glDrawArraysInstanced(GL_TRIANGLES, d->level0_begin, d->level1_end - d->level1_begin, d->lvl1_count);
-			d->lvl1_count = 0;
-			s_polys += (d->level1_end-d->level1_begin) / 3;
+			glUniformMatrix4fv(kosmos::shader::find_uniform(d->sprog, "tileworld"), d->lvl1_count, GL_FALSE, d->lvl1_mtx);
+			glDrawArraysInstanced(GL_TRIANGLES, d->level1_begin, d->level1_end - d->level1_begin, d->lvl1_count);
+            
+			s_polys += d->lvl1_count * (d->level1_end-d->level1_begin) / 3;
 			s_drawcalls++;
+            
+            d->lvl1_count = 0;
 		}
 	}
 
@@ -311,6 +283,10 @@ namespace terrain
 		glBindBuffer(GL_ARRAY_BUFFER, d->vbo);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(terrain_vtx_t) * (end1 - buf), buf, GL_STATIC_DRAW);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
+        
+        glGenVertexArrays(1, &d->vao);
+        glBindVertexArray(d->vao);
+        
 		return d;
 	}
 
@@ -329,6 +305,7 @@ namespace terrain
 		kosmos::shader::program_use(d->sprog);
 
 		// binds to active buffer
+        glBindVertexArray(d->vao);
 		glBindBuffer(GL_ARRAY_BUFFER, d->vbo);
 		glVertexAttribPointer(kosmos::shader::find_attribute(d->sprog, "vpos"), 2, GL_FLOAT, GL_FALSE, sizeof(terrain_vtx_t), 0);
 		glVertexAttribPointer(kosmos::shader::find_attribute(d->sprog, "tpos"), 2, GL_FLOAT, GL_FALSE, sizeof(terrain_vtx_t), (void*)8);
@@ -337,6 +314,7 @@ namespace terrain
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 		glUniformMatrix4fv(kosmos::shader::find_uniform(d->sprog, "viewproj"), 1, GL_FALSE, p->view_mtx);
+
 
 		s_polys = 0;
 		s_drawcalls = 0;
@@ -353,6 +331,8 @@ namespace terrain
 		}
 
 		flush(d, true);
+        
+        printf("Draw calls %lld, polys %lld\n", s_drawcalls, s_polys);
 
 		glUseProgram(0);
 	}

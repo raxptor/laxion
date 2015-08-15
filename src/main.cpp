@@ -84,7 +84,7 @@ void draw_world(float *viewproj)
 	memcpy(p.viewpoint, camera_pos, 3*sizeof(float));
 	memcpy(&p.view_mtx[0], viewproj, 4*4*sizeof(float));
 
-	p.r = 0.2f;
+	p.r = 1.4f;
 	p.terrain = s_terrain_config;
 	terrain::draw_terrain_tiles(s_terrain, &m, &p, x0, y0, x1, y1);
 }
@@ -101,16 +101,10 @@ void frame(laxion::appwindow::input_batch *input, float deltatime)
 	
 	kosmos::render::begin(x1-x0, y1-x0, true, true, 0xff00ff);
 
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-
 	float out[16];
-
 	gtime += 3.3f * deltatime;
 	camera_pos[0] = sinf(0.3f * gtime) * 100;
-	camera_pos[1] = 50.0f + sinf(0.35f * gtime) * 4.0f;
+	camera_pos[1] = 10.0f + sinf(0.35f * gtime) * 4.0f;
 	camera_pos[2] = -20.0f * gtime + cosf(0.05f * gtime) * 100;
 
 	camera_matrix(out);

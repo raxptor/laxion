@@ -109,9 +109,7 @@ struct update_info
 	NSOpenGLPixelFormatAttribute attrs[] = {
 		NSOpenGLPFAAllRenderers,
 		NSOpenGLPFADepthSize, 32,
-		NSOpenGLPFAOpenGLProfile,
-		NSOpenGLProfileVersion3_2Core,	
-		0
+        0
 	};
 
 	CGLPixelFormatObj cglPixelFormat  = (CGLPixelFormatObj) [[NSOpenGLPixelFormat alloc] initWithAttributes:attrs];
@@ -259,6 +257,8 @@ namespace laxion
 			NSOpenGLPixelFormatAttribute attrs[] = {
 				NSOpenGLPFAAllRenderers,
 				NSOpenGLPFADepthSize, 32,
+                NSOpenGLPFAOpenGLProfile,
+                NSOpenGLProfileVersion3_2Core,                
 				0
 			};
 
