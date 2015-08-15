@@ -10,13 +10,6 @@
 
 namespace terrain
 {
-	// Tiles are just convenient places to start subdividing.
-	//
-	enum
-	{
-		TILE_SAMPLES    = 4096,
-	};
-	
 	struct terrain_vtx_t
 	{
 		float x, y;
@@ -27,6 +20,13 @@ namespace terrain
 	{
 		return 1 + 1 * layer;
 	}
+    
+    enum
+    {
+        LEVEL_0_SAMPLES = 32,
+        LEVEL_1_SAMPLES = LEVEL_0_SAMPLES * 2
+    };
+    
 	
 	void make_patch_vertices(terrain_vtx_t *out, int size)
 	{
@@ -75,12 +75,13 @@ namespace terrain
 			{
 				if ((L + 1) < m)
 				{
-					/*
+                    /*
 					*out++ = L;
 					*out++ = K;
 					*out++ = L+1;
-					*/
+                    */
 					L++;
+                
 				}
 				if ((K + 1) < l)
 				{
@@ -101,10 +102,15 @@ namespace terrain
 
 	float get_height(float x, float z)
 	{
-		return sinf(x*0.03f + z*0.03f) * 10.0;
+		return sinf(x*0.01f + z*0.03f) * 10.0;
 	}
-	
-	terrain_vtx_t* make_patch(int size, terrain_vtx_t *out_array)
+    
+    float get_terrain_height(data *d, float x, float z)
+    {
+        return get_height(x, z);
+    }
+
+    terrain_vtx_t* make_patch(int size, terrain_vtx_t *out_array)
 	{
 		static terrain_vtx_t vtx[1024*1024];
 		static unsigned short idx[1024*1024];
@@ -140,22 +146,6 @@ namespace terrain
 	};
 
 	static long long s_polys = 0, s_drawcalls = 0;
-
-	float edge_scaling(params* p, float x0, float z0, float x1, float z1)
-	{
-		const float y0 = get_height(x0, z0);
-		const float y1 = get_height(x1, z1);
-		float dx0 = x0 - p->viewpoint[0];
-		float dy0 = y0 - p->viewpoint[1];
-		float dz0 = z0 - p->viewpoint[2];
-		float dx1 = x1 - p->viewpoint[0];
-		float dy1 = y1 - p->viewpoint[1];
-		float dz1 = z1 - p->viewpoint[2];
-		float d0 = dx0*dx0 + dy0*dy0 + dz0*dz0;
-		float d1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
-		float d = d0 < d1 ? d0 : d1;
-		return sqrtf((x1-x0)*(x1-x0)+(y1-y0)*(y1-y0)+(z1-z0)*(z1-z0)) / sqrtf(d);
-	}
 
 	int level(float s)
 	{
@@ -205,30 +195,96 @@ namespace terrain
 			d->lvl1_count++;
 		}
 	}
+    
+    struct draw_info
+    {
+        data *d;
+        view v;
+        float mps; // meters per sample
+        float comp_r;
+    };
+    
+    float edge_scaling(draw_info *di, int u0, int v0, int u1, int v1)
+    {
+        const float x0 = di->mps * u0;
+        const float z0 = di->mps * v0;
+        const float x1 = di->mps * u1;
+        const float z1 = di->mps * v1;
+        const float y0 = get_height(x0, z0);
+        const float y1 = get_height(x1, z1);
+        float dx0 = x0 - di->v.viewpoint[0];
+        float dy0 = y0 - di->v.viewpoint[1];
+        float dz0 = z0 - di->v.viewpoint[2];
+        float dx1 = x1 - di->v.viewpoint[0];
+        float dy1 = y1 - di->v.viewpoint[1];
+        float dz1 = z1 - di->v.viewpoint[2];
+        float d0 = dx0*dx0 + dy0*dy0 + dz0*dz0;
+        float d1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+        float d = d0 < d1 ? d0 : d1;
+        return sqrtf((x1-x0)*(x1-x0)+(y1-y0)*(y1-y0)+(z1-z0)*(z1-z0)) / sqrtf(d);
+    }
+    
+    void do_tile(draw_info *di, int u0, int v0, int u1, int v1);
 
-	void do_tile(data *d, mapping *m, params *p, float x0, float z0, float x1, float z1)
+    void do_tile_subdivide(draw_info *di, int u0, int v0, int u1, int v1)
+    {
+        int cu = (u0 + u1) / 2;
+        int cv = (v0 + v1) / 2;
+        do_tile(di, u0, v0, cu, cv);
+        do_tile(di, cu, v0, u1, cv);
+        do_tile(di, u0, cv, cu, v1);
+        do_tile(di, cu, cv, u1, v1);
+    }
+    
+    inline bool allow_subdivide(draw_info *di, int u0, int v0, int u1, int v1)
+    {
+        // 2* since we draw from middle and out.
+        return (u1 - u0 > 2*LEVEL_1_SAMPLES);
+    }
+    
+    inline bool within_range(draw_info *di, int u, int v)
+    {
+        const float dx = (di->mps * u - di->v.viewpoint[0]);
+        const float dy = (di->mps * v - di->v.viewpoint[2]);
+        return dx*dx + dy*dy < di->v.max_range_sqr;
+    }
+    
+    void do_tile(draw_info *di, int u0, int v0, int u1, int v1)
 	{
-		const float s0 = p->r * edge_scaling(p, x0, z0, x1, z0);
-		const float s1 = p->r * edge_scaling(p, x0, z0, x0, z1);
-		const float s2 = p->r * edge_scaling(p, x1, z1, x1, z0);
-		const float s3 = p->r * edge_scaling(p, x1, z1, x0, z1);
+        const bool r0 = within_range(di, u0, v0);
+        const bool r1 = within_range(di, u1, v0);
+        const bool r2 = within_range(di, u0, v1);
+        const bool r3 = within_range(di, u1, v1);
+        const bool can_subdivide = allow_subdivide(di, u0, v0, u1, v1);
 
-		if (s0 > 1 || s1 > 1 || s2 > 1 || s3 > 1)
+        if (!r0 && !r1 && !r2 && !r3)
+        {
+            int tx = di->mps * (u1 - u0);
+            if (tx*tx < 0.0001f * di->v.max_range_sqr)
+                return;
+            
+            if (can_subdivide)
+            {
+                do_tile_subdivide(di, u0, v0, u1, v1);
+            }
+            return;
+        }
+        
+		const float s0 = di->comp_r * edge_scaling(di, u0, v0, u1, v0);
+		const float s1 = di->comp_r * edge_scaling(di, u0, v0, u0, v1);
+		const float s2 = di->comp_r * edge_scaling(di, u1, v1, u1, v0);
+		const float s3 = di->comp_r * edge_scaling(di, u1, v1, u0, v1);
+
+        if (can_subdivide && (s0 > 1 || s1 > 1 || s2 > 1 || s3 > 1))
 		{
-			float cx = .5f * (x0 + x1);
-			float cz = .5f * (z0 + z1);
-			do_tile(d, m, p, x0, z0, cx, cz);
-			do_tile(d, m, p, cx, z0, x1, cz);
-			do_tile(d, m, p, x0, cz, cx, z1);
-			do_tile(d, m, p, cx, cz, x1, z1);
+            do_tile_subdivide(di, u0, v0, u1, v1);
 			return;
 		}
 
-		const float cx = (x0+x1) / 2.0f;
-		const float cz = (z0+z1) / 2.0f;
-
-		const float sx = 0.5f * (x1 - x0);
-		const float sz = 0.5f * (z1 - z0);
+        const float cx = di->mps * ((u0+u1) / 2);
+		const float cz = di->mps * ((v0+v1) / 2);
+		const float sx = di->mps * ((u1 - u0) / 2);
+		const float sz = di->mps * ((v1 - v0) / 2);
 		float mtx[16];
 		kosmos::mat4_zero(mtx);
 		// down
@@ -238,25 +294,25 @@ namespace terrain
 		mtx[12] = cx;
 		mtx[14] = cz;
 		mtx[15] = 1;
-		draw_patch(d, level(s3), mtx);
+		draw_patch(di->d, level(s3), mtx);
 		// up
 		mtx[0] = -sx;
 		mtx[10] = -sz;
 		mtx[12] = cx;
 		mtx[14] = cz;
-		draw_patch(d, level(s0), mtx);
+		draw_patch(di->d, level(s0), mtx);
 		// left
 		mtx[0] = 0;
 		mtx[10] = 0;
 		mtx[2] = -sx;
 		mtx[8] = -sz;
-		draw_patch(d, level(s1), mtx);
+		draw_patch(di->d, level(s1), mtx);
 		// right
 		mtx[0] = 0;
 		mtx[10] = 0;
 		mtx[2] = sx;
 		mtx[8] = sz;
-		draw_patch(d, level(s2), mtx);
+		draw_patch(di->d, level(s2), mtx);
 	}
 
 	data* create(outki::TerrainConfig *config)
@@ -265,6 +321,8 @@ namespace terrain
 		glGenBuffers(1, &d->vbo);
 
 		d->sprog = kosmos::shader::program_get(config->Shader);
+        d->config = config;
+        
 		if (!d->sprog)
 		{
 			KOSMOS_ERROR("No terrain program")
@@ -272,8 +330,8 @@ namespace terrain
 		}
 
 		static terrain_vtx_t buf[1024*1024];
-		terrain_vtx_t *end0 = make_patch(33, &buf[0]);
-		terrain_vtx_t *end1 = make_patch(65, end0);
+		terrain_vtx_t *end0 = make_patch(LEVEL_0_SAMPLES + 1, &buf[0]);
+		terrain_vtx_t *end1 = make_patch(LEVEL_0_SAMPLES * 2 + 1, end0);
 
 		d->level0_begin = 0;
 		d->level0_end = end0 - buf;
@@ -297,61 +355,58 @@ namespace terrain
 		delete d;
 	}
 
-
-	void draw_terrain_tiles(data *d, mapping *m, params* p, int x0, int z0, int x1, int z1)
-	{
-		const float tile_size = (float)TILE_SAMPLES / m->samples_per_meter;
-
-		kosmos::shader::program_use(d->sprog);
-
-		// binds to active buffer
-        glBindVertexArray(d->vao);
-		glBindBuffer(GL_ARRAY_BUFFER, d->vbo);
-		glVertexAttribPointer(kosmos::shader::find_attribute(d->sprog, "vpos"), 2, GL_FLOAT, GL_FALSE, sizeof(terrain_vtx_t), 0);
-		glVertexAttribPointer(kosmos::shader::find_attribute(d->sprog, "tpos"), 2, GL_FLOAT, GL_FALSE, sizeof(terrain_vtx_t), (void*)8);
-		glEnableVertexAttribArray(kosmos::shader::find_attribute(d->sprog, "vpos"));
-		glEnableVertexAttribArray(kosmos::shader::find_attribute(d->sprog, "tpos"));
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-		glUniformMatrix4fv(kosmos::shader::find_uniform(d->sprog, "viewproj"), 1, GL_FALSE, p->view_mtx);
-
-
-		s_polys = 0;
-		s_drawcalls = 0;
-
-		d->lvl0_count = 0;
-		d->lvl1_count = 0;
-
-		for (int z=z1-1;z>=z0;z--)
-		{
-			for (int x=x0;x<x1;x++)
-			{
-				do_tile(d, m, p, tile_size * x, tile_size * z, tile_size * (x + 1),  tile_size * (z + 1));
-			}
-		}
-
-		flush(d, true);
+    void draw_terrain(data *d, view* view)
+    {
+        kosmos::shader::program_use(d->sprog);
         
-        printf("Draw calls %lld, polys %lld\n", s_drawcalls, s_polys);
-
-		glUseProgram(0);
-	}
-
-	void compute_tiles(mapping *m, float *camera_pos, float range, int* x0, int* z0, int *x1, int* z1)
-	{
-		const float tile_size = (float)TILE_SAMPLES / m->samples_per_meter;
-		int tx = (int)(camera_pos[0] / tile_size);
-		int tz = (int)(camera_pos[2] / tile_size);
-
-		int range_tiles = range / tile_size;
-
-		// compute the location of the centre tile
-
-		*x0 = tx - range_tiles;
-		*z0 = tz - range_tiles;
-		*x1 = tx + range_tiles;
-		*z1 = tz + range_tiles;
-
-		printf("%d %d %d %d\n", *x0, *z0, *x1, *z1);
-	}
+        // binds to active buffer
+        glBindVertexArray(d->vao);
+        
+        kosmos::shader::program_use(d->sprog);
+        
+        glBindBuffer(GL_ARRAY_BUFFER, d->vbo);
+        glVertexAttribPointer(kosmos::shader::find_attribute(d->sprog, "vpos"), 2, GL_FLOAT, GL_FALSE, sizeof(terrain_vtx_t), 0);
+        glVertexAttribPointer(kosmos::shader::find_attribute(d->sprog, "tpos"), 2, GL_FLOAT, GL_FALSE, sizeof(terrain_vtx_t), (void*)8);
+        glEnableVertexAttribArray(kosmos::shader::find_attribute(d->sprog, "vpos"));
+        glEnableVertexAttribArray(kosmos::shader::find_attribute(d->sprog, "tpos"));
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        
+        glUniformMatrix4fv(kosmos::shader::find_uniform(d->sprog, "viewproj"), 1, GL_FALSE, view->view_mtx);
+        
+        const int ws = d->config->WindowSize;
+        const int spm = d->config->SamplesPerMeter;
+  
+        const int bias = 0x40000000;
+        const int bias_tiles = bias / ws;
+        const int bias_samples = bias_tiles * ws;
+        
+        int cam_u = int(view->viewpoint[0] * spm) + bias_samples;
+        int cam_v = int(view->viewpoint[2] * spm) + bias_samples;
+    
+        // tile start
+        cam_u = (cam_u / ws) - bias_tiles;
+        cam_v = (cam_v / ws) - bias_tiles;
+        
+        draw_info di;
+        di.d = d;
+        di.v = *view;
+        di.mps = 1.0f / spm;
+        di.comp_r = view->r;
+        
+        s_drawcalls = 0;
+        s_polys = 0;
+        
+        for (int u=-1;u!=2;u++)
+        {
+            for (int v=-1;v!=2;v++)
+            {
+                int tile_u = cam_u + u;
+                int tile_v = cam_v + v;
+                
+                do_tile(&di, ws * tile_u, ws * tile_v, ws * tile_u + ws, ws * tile_v + ws);            }
+        }
+        
+        flush(d, true);
+        printf("draw calls: %lld polys: %lld\n", s_drawcalls, s_polys);
+    }
 }

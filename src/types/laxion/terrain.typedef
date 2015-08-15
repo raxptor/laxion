@@ -3,6 +3,6 @@
 TerrainConfig
 {
 	ptr ShaderProgram Shader
-	float Detail
+	u32 WindowSize = 4096
+	float SamplesPerMeter = 10.0f
 }
-

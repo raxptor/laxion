@@ -2,7 +2,8 @@
 	type: "TerrainConfig",
 	data: {
 		"Shader": "shader/terrain/terrainshader",
-		"Detail": 0.0000000000
+		"Detail": 0.0000000000,
+		"SamplesPerMeter": 5,
 	},
 	aux: [
 	]

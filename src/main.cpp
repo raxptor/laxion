@@ -63,9 +63,9 @@ void load()
 void camera_matrix(float *out)
 {
 	float persp[16], rot[16], trans[16];
-	kosmos::mat4_rot_x(rot, 3.1415f * 0.2f);
+    kosmos::mat4_rot_x(rot, 3.1415f * 0.1f);
 	kosmos::mat4_trans(trans, -camera_pos[0], -camera_pos[1], -camera_pos[2]);
-	kosmos::mat4_persp(persp, 1.20f, 0.90f, 1.0f, 1000.0f);
+	kosmos::mat4_persp(persp, 1.20f, 0.90f, 1.0f, 200.0f);
 	kosmos::mul_mat4(out, persp, rot, trans);
 }
 
@@ -74,19 +74,14 @@ void draw_world(float *viewproj)
 {
 	LIVE_UPDATE(&s_terrain_config);
 	
-	terrain::mapping m;
-	m.samples_per_meter = 10.0f;
+	terrain::view vw;
+    memset(&vw, 0x00, sizeof(terrain::view));
+	memcpy(&vw.viewpoint[0], camera_pos, 3*sizeof(float));
+	memcpy(&vw.view_mtx[0], viewproj, 4*4*sizeof(float));
 
-	int x0, y0, x1, y1;
-	terrain::compute_tiles(&m, camera_pos, 900.0f, &x0, &y0, &x1, &y1);
-
-	terrain::params p;
-	memcpy(p.viewpoint, camera_pos, 3*sizeof(float));
-	memcpy(&p.view_mtx[0], viewproj, 4*4*sizeof(float));
-
-	p.r = 1.4f;
-	p.terrain = s_terrain_config;
-	terrain::draw_terrain_tiles(s_terrain, &m, &p, x0, y0, x1, y1);
+    vw.max_range_sqr = 200.0f * 200.0f;
+	vw.r = 0.7f;
+    terrain::draw_terrain(s_terrain, &vw);
 }
 
 void frame(laxion::appwindow::input_batch *input, float deltatime)
@@ -102,11 +97,11 @@ void frame(laxion::appwindow::input_batch *input, float deltatime)
 	kosmos::render::begin(x1-x0, y1-x0, true, true, 0xff00ff);
 
 	float out[16];
-	gtime += 3.3f * deltatime;
+	gtime += 0.9f * deltatime;
 	camera_pos[0] = sinf(0.3f * gtime) * 100;
-	camera_pos[1] = 10.0f + sinf(0.35f * gtime) * 4.0f;
 	camera_pos[2] = -20.0f * gtime + cosf(0.05f * gtime) * 100;
-
+    camera_pos[1] = terrain::get_terrain_height(s_terrain, camera_pos[0], camera_pos[2]) + 1.60f;
+ 
 	camera_matrix(out);
 
 	draw_world(out);
