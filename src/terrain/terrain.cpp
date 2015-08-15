@@ -74,20 +74,18 @@ namespace terrain
 			while (true)
 			{
 				if ((L + 1) < m)
-				{
-                    /*
-					*out++ = L;
+				{/*
 					*out++ = K;
-					*out++ = L+1;
-                    */
+					*out++ = L;
+					*out++ = L+1;*/
 					L++;
                 
 				}
 				if ((K + 1) < l)
 				{
 					*out++ = L;
-					*out++ = K;
 					*out++ = K + 1;
+					*out++ = K;
 					K++;
 				}
 				if (K == (l-1) && L == (m-1))
@@ -129,7 +127,7 @@ namespace terrain
 	}
 
 	enum {
-		MAX_INSTANCES = 128
+		MAX_INSTANCES = 64
 	};
 
 	struct data
@@ -140,9 +138,13 @@ namespace terrain
 		int level0_begin, level0_end;
 		int level1_begin, level1_end;
 
-		float lvl0_mtx[MAX_INSTANCES*16];
-		float lvl1_mtx[MAX_INSTANCES*16];
+		float lvl0_mtx[MAX_INSTANCES*2*16];
+		float lvl1_mtx[MAX_INSTANCES*2*16];
 		int lvl0_count, lvl1_count;
+    
+        float *height_data;
+        uint32_t heightmap_size;
+        GLuint heightmap;
 	};
 
 	static long long s_polys = 0, s_drawcalls = 0;
@@ -160,7 +162,7 @@ namespace terrain
 		int lim = force ? 0 : (MAX_INSTANCES - 1);
 		if (d->lvl0_count > lim)
 		{
-			glUniformMatrix4fv(kosmos::shader::find_uniform(d->sprog, "tileworld"), d->lvl0_count, GL_FALSE, d->lvl0_mtx);
+			glUniformMatrix4fv(kosmos::shader::find_uniform(d->sprog, "tileworld"), 2 * d->lvl0_count, GL_FALSE, d->lvl0_mtx);
 			glDrawArraysInstanced(GL_TRIANGLES, d->level0_begin, d->level0_end - d->level0_begin, d->lvl0_count);
 
 			s_polys += d->lvl0_count * (d->level0_end-d->level0_begin) / 3;
@@ -170,7 +172,7 @@ namespace terrain
 		}
 		if (d->lvl1_count > lim)
 		{
-			glUniformMatrix4fv(kosmos::shader::find_uniform(d->sprog, "tileworld"), d->lvl1_count, GL_FALSE, d->lvl1_mtx);
+			glUniformMatrix4fv(kosmos::shader::find_uniform(d->sprog, "tileworld"), 2 * d->lvl1_count, GL_FALSE, d->lvl1_mtx);
 			glDrawArraysInstanced(GL_TRIANGLES, d->level1_begin, d->level1_end - d->level1_begin, d->lvl1_count);
             
 			s_polys += d->lvl1_count * (d->level1_end-d->level1_begin) / 3;
@@ -180,18 +182,20 @@ namespace terrain
 		}
 	}
 
-	void draw_patch(data *d, int index, float *mtx)
+	void draw_patch(data *d, int index, float *mtx_world, float *mtx_uv)
 	{
 		flush(d, false);
 
 		if (index == 0)
 		{
-			memcpy(&d->lvl0_mtx[d->lvl0_count * 16], mtx, 16*sizeof(float));
+			memcpy(&d->lvl0_mtx[d->lvl0_count * 32], mtx_world, 16*sizeof(float));
+            memcpy(&d->lvl0_mtx[d->lvl0_count * 32 + 16], mtx_uv, 16*sizeof(float));
 			d->lvl0_count++;
 		}
 		else
 		{
-			memcpy(&d->lvl1_mtx[d->lvl1_count * 16], mtx, 16*sizeof(float));
+			memcpy(&d->lvl1_mtx[d->lvl1_count * 32], mtx_world, 16*sizeof(float));
+            memcpy(&d->lvl1_mtx[d->lvl1_count * 32 + 16], mtx_uv, 16*sizeof(float));
 			d->lvl1_count++;
 		}
 	}
@@ -238,8 +242,7 @@ namespace terrain
     
     inline bool allow_subdivide(draw_info *di, int u0, int v0, int u1, int v1)
     {
-        // 2* since we draw from middle and out.
-        return (u1 - u0 > 2*LEVEL_1_SAMPLES);
+        return (u1 - u0) > LEVEL_1_SAMPLES;
     }
     
     inline bool within_range(draw_info *di, int u, int v)
@@ -285,8 +288,10 @@ namespace terrain
 		const float cz = di->mps * ((v0+v1) / 2);
 		const float sx = di->mps * ((u1 - u0) / 2);
 		const float sz = di->mps * ((v1 - v0) / 2);
-		float mtx[16];
+		float mtx[16], uvmtx[16];
 		kosmos::mat4_zero(mtx);
+        kosmos::mat4_zero(uvmtx);
+        
 		// down
 		mtx[0] = sx;
 		mtx[5] = 1.0f;
@@ -294,27 +299,58 @@ namespace terrain
 		mtx[12] = cx;
 		mtx[14] = cz;
 		mtx[15] = 1;
-		draw_patch(di->d, level(s3), mtx);
+        
+        uvmtx[0] = (u1-u0) / 2;
+        uvmtx[5] = (u1-u0) / 2;
+        uvmtx[12] = (u0 + u1) / 2;
+        uvmtx[13] = (v0 + v1) / 2;
+        
+		draw_patch(di->d, level(s3), mtx, uvmtx);
+        
 		// up
 		mtx[0] = -sx;
 		mtx[10] = -sz;
 		mtx[12] = cx;
 		mtx[14] = cz;
-		draw_patch(di->d, level(s0), mtx);
-		// left
+        
+        uvmtx[0] = -(u1-u0) / 2;
+        uvmtx[5] = -(u1-u0) / 2;
+		draw_patch(di->d, level(s0), mtx, uvmtx);
+
+        // left
 		mtx[0] = 0;
 		mtx[10] = 0;
 		mtx[2] = -sx;
-		mtx[8] = -sz;
-		draw_patch(di->d, level(s1), mtx);
+		mtx[8] = sz;
+
+
+        uvmtx[0] = 0;
+        uvmtx[1] = -(u1-u0) / 2;
+        uvmtx[4] = (u1-u0) / 2;
+        uvmtx[5] = 0;
+        
+		draw_patch(di->d, level(s1), mtx, uvmtx);
 		// right
 		mtx[0] = 0;
 		mtx[10] = 0;
 		mtx[2] = sx;
-		mtx[8] = sz;
-		draw_patch(di->d, level(s2), mtx);
+		mtx[8] = -sz;
+        
+        uvmtx[0] = 0;
+        uvmtx[1] = (u1-u0) / 2;
+        uvmtx[4] = -(u1-u0) / 2;
+        uvmtx[5] = 0;
+    
+		draw_patch(di->d, level(s2), mtx, uvmtx);
 	}
 
+    void cerr()
+    {
+        GLenum err = glGetError();
+        if (err != GL_NO_ERROR)
+            KOSMOS_ERROR("gl error " << err);
+    }
+    
 	data* create(outki::TerrainConfig *config)
 	{
 		data *d = new data();
@@ -345,6 +381,20 @@ namespace terrain
         glGenVertexArrays(1, &d->vao);
         glBindVertexArray(d->vao);
         
+        d->heightmap_size = d->config->WindowSize;
+        d->height_data = new float[d->heightmap_size * d->heightmap_size];
+        for (uint32_t u=0;u!=d->heightmap_size;u++)
+        {
+            for (uint32_t v=0;v!=d->heightmap_size;v++)
+            {
+               uint32_t x = (u&1)^(v&1);
+                d->height_data[v * d->heightmap_size + u] = x ? 0.1f : 0.0f;//get_height(u/d->config->SamplesPerMeter, v/d->config->SamplesPerMeter);
+            }
+        }
+        
+        glGenTextures(1, &d->heightmap);
+        glBindTexture(GL_TEXTURE_2D, d->heightmap);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, d->heightmap_size, d->heightmap_size, 0, GL_RED, GL_FLOAT, d->height_data);
 		return d;
 	}
 
@@ -370,6 +420,15 @@ namespace terrain
         glEnableVertexAttribArray(kosmos::shader::find_attribute(d->sprog, "vpos"));
         glEnableVertexAttribArray(kosmos::shader::find_attribute(d->sprog, "tpos"));
         glBindBuffer(GL_ARRAY_BUFFER, 0);
+        
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, d->heightmap);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+        glUniform1i(kosmos::shader::find_uniform(d->sprog, "heightmap"), 0);
         
         glUniformMatrix4fv(kosmos::shader::find_uniform(d->sprog, "viewproj"), 1, GL_FALSE, view->view_mtx);
         

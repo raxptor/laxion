@@ -100,10 +100,13 @@ void frame(laxion::appwindow::input_batch *input, float deltatime)
 	gtime += 0.9f * deltatime;
 	camera_pos[0] = sinf(0.3f * gtime) * 100;
 	camera_pos[2] = -20.0f * gtime + cosf(0.05f * gtime) * 100;
-    camera_pos[1] = terrain::get_terrain_height(s_terrain, camera_pos[0], camera_pos[2]) + 1.60f;
+    camera_pos[1] = terrain::get_terrain_height(s_terrain, camera_pos[0], camera_pos[2]) + 1.0f;
  
 	camera_matrix(out);
 
+    glEnable(GL_CULL_FACE);
+    glEnable(GL_DEPTH_TEST);
+    
 	draw_world(out);
 
 	kosmos::render::end();

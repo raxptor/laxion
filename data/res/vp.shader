@@ -5,12 +5,17 @@ in vec2 tpos;
 
 uniform mat4 viewproj;
 uniform mat4 tileworld[128];
+uniform sampler2D heightmap;
+
+out vec2 col;
 
 void main(void)
 {
 	int k = gl_InstanceID;
-	vec4 world = tileworld[k] * vec4(vpos.x, 0.0, vpos.y, 1.0);
-	world.y = sin(world.x*0.01 + world.z*0.03) * 10.0;
+	vec4 world = tileworld[2*k] * vec4(vpos.x, 0.0, vpos.y, 1.0);
+	vec2 texel = (tileworld[2*k+1] * vec4(vpos.x, vpos.y, 0.0, 1.0)).xy;
+	world.y = texelFetch(heightmap, ivec2(texel.x, texel.y), 0).x;
+
+	col = vec2(texel.x, texel.y);
 	gl_Position = viewproj * world;
-//	gl_Position = vec4(world.x * 0.001, world.z * 0.001, 0.5, 1);
 }
