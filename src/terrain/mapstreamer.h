@@ -12,6 +12,7 @@ namespace mapstreamer
 
 	// request area
 	void request(int x0, int y0, int x1, int y1);
+
 	// if streamed in
 	bool query(int x0, int y0, int x1, int y1);
 }
