@@ -1,5 +1,4 @@
-#ifndef LAXION_TERRAIN_LOD_H
-#define LAXION_TERRAIN_LOD_H
+#pragma once
 
 namespace mapstreamer
 {
@@ -10,11 +9,11 @@ namespace mapstreamer
 
 	int tex_handle(data *d);
 
-	// request area
-	void request(int x0, int y0, int x1, int y1);
+	float sample(data *d, int u, int v);
 
+	// request area
+	void request(data *d, int x0, int y0, int x1, int y1);
 	// if streamed in
-	bool query(int x0, int y0, int x1, int y1);
+	bool query(data *d, int x0, int y0, int x1, int y1);
 }
 
-#endif

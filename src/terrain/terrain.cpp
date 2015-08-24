@@ -1,4 +1,5 @@
 #include "terrain.h"
+#include "mapstreamer.h"
 
 #include <kosmos/glwrap/gl.h>
 #include <kosmos/core/mat4.h>
@@ -10,6 +11,7 @@
 #include <stdio.h>
 
 #include <cassert>
+
 
 namespace terrain
 {
@@ -61,12 +63,8 @@ namespace terrain
 		int verts_begin[2];
 		int verts_count[2];
 
-		float *height_data;
-		uint32_t heightmap_size;
-		GLuint heightmap;
-
+		mapstreamer::data *map;
 		draw_buffer buffer;
-
 	};
 
 	struct draw_info
@@ -152,14 +150,11 @@ namespace terrain
 		return out - start;
 	}
 
-	float get_height(float x, float z)
-	{
-		return sinf(x*0.1f + z*0.24f + sin(x*0.4)*3.0f) * (0.30f + 100.0f * sinf(x*0.0001f + z*0.00015));
-	}
-
 	float get_terrain_height(data *d, float x, float z)
 	{
-		return get_height(x, z);
+		int u = (int)(x * d->config->SamplesPerMeter);
+		int v = (int)(z * d->config->SamplesPerMeter);
+		return mapstreamer::sample(d->map, u, v);
 	}
 
 	terrain_vtx_t* make_patch(int size, terrain_vtx_t *out_array)
@@ -495,24 +490,12 @@ namespace terrain
 
 		glBindBuffer(GL_ARRAY_BUFFER, d->vbo);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(terrain_vtx_t) * (end1 - buf), buf, GL_STATIC_DRAW);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);		
 
 		glGenVertexArrays(1, &d->vao);
 		glBindVertexArray(d->vao);
 
-		d->heightmap_size = d->config->WindowSize;
-		d->height_data = new float[d->heightmap_size * d->heightmap_size];
-		for (uint32_t u=0;u!=d->heightmap_size;u++)
-		{
-			for (uint32_t v=0;v!=d->heightmap_size;v++)
-			{
-				d->height_data[v * d->heightmap_size + u] = get_height(u/d->config->SamplesPerMeter, v/d->config->SamplesPerMeter);
-			}
-		}
-
-		glGenTextures(1, &d->heightmap);
-		glBindTexture(GL_TEXTURE_2D, d->heightmap);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, d->heightmap_size, d->heightmap_size, 0, GL_RED, GL_FLOAT, d->height_data);
+		d->map = mapstreamer::create(d->config->WindowSize);
 		return d;
 	}
 
@@ -520,6 +503,7 @@ namespace terrain
 	{
 		kosmos::shader::program_free(d->sprog);
 		glDeleteBuffers(1, &d->vbo);
+		mapstreamer::free(d->map);
 		delete d;
 	}
 
@@ -578,7 +562,7 @@ namespace terrain
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, d->heightmap);
+		glBindTexture(GL_TEXTURE_2D, mapstreamer::tex_handle(d->map));
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
